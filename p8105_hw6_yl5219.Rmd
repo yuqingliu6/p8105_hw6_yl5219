@@ -130,7 +130,7 @@ summary(model_tmax)
 ```
 
 **Perform bootstrap analysis for $\hat r^2$ and $\log(\hat\beta_1\times \hat\beta_2)$**
-
+**Set seed**
 ```{r}
 set.seed(123)
 ```
@@ -155,7 +155,7 @@ boot_straps =
 boot_straps
 ```
 
-**Combine 5000 bootstrap estimates**
+**Combine 5000 bootstraps results**
 
 ```{r}
 bootstrap_results = 
@@ -169,7 +169,7 @@ bootstrap_results =
 ```
 
 
-**Computing log_betas and getting 5000 of those estiamtes**
+**Compute the log of the product of beta estimates $\log(\hat\beta_1\times \hat\beta_2)$ of 5000 bootstraps**
 
 ```{r}
 log_betas <-  
@@ -180,7 +180,7 @@ log_betas <-
 ```
 
 
-**Generating 5000 bootstrap estimates**
+**Generate another 5000 bootstrap estimates**
 ```{r}
 bootstrap_results2 <- 
   boot_straps %>% 
@@ -191,16 +191,16 @@ bootstrap_results2 <-
   unnest(results) 
 ```
 
-**Getting 5000 R-Squared estimates**
+**Compute the R-Squared $\hat r^2$ of 5000 bootstraps**
 ```{r}
 r_squared <- 
   bootstrap_results2 %>%
   select(r.squared, strap_number)
 ```
 
-**Fitting density plots of two estimates**
+**Fit density plot of the product of beta estimates $\log(\hat\beta_1\times \hat\beta_2)$**
 
-```{r,warning=FALSE}
+```{r}
 log_betas_sd <- 
   log_betas %>%
   summarise(log_betas_sd = sd(as.numeric(log_betas),na.rm = TRUE)) %>%
@@ -216,9 +216,11 @@ log_betas %>%
   labs(title = "Distribution of log(Beta1 * Beta2)")
 ```
 
-The density curve for $\log(\hat\beta_1\times \hat\beta_2)$ is left-skewed with a mean around `r round(log_betas_mean,4)` and a sd around `r round(log_betas_sd,4)`
+**Discussion:** The density curve of the the product of two beta estimates $\log(\hat\beta_1\times \hat\beta_2)$ is left-skewed. Its mean is approximately`r round(log_betas_mean,4)`, and its standard deviation is  approximately `r round(log_betas_sd,4)`.
 
-```{r,warning=FALSE}
+**Fit density plot of R-Squared $\hat r^2$ **
+
+```{r}
 r_squared_sd <-
   r_squared %>%
   summarise(r_squared_sd = sd(r.squared)) %>%
@@ -234,9 +236,9 @@ r_squared %>%
   labs(title = "Distribution of R-squared")
 ```
 
-The density curve for $\hat r^2$ is slightly left-skewed with a mean around `r round(r_squared_mean,4)` and a sd around `r round(r_squared_sd,4)`
+**Discussion:** The density curve of R-Squared $\hat r^2$ is slightly left-skewed. Its mean is  approximately `r round(r_squared_mean,4)` and its standard deviation is  approximately `r round(r_squared_sd,4)`.
 
-**95% CI for $\log(\hat\beta_1\times \hat\beta_2)$**
+**95% CI of log of the product of beta estimates $\log(\hat\beta_1\times \hat\beta_2)$**
 ```{r}
 CI_result <-
   log_betas %>%
@@ -247,9 +249,9 @@ CI_result_lower <- CI_result %>% pull(ci_lower)
 CI_result_upper <- CI_result %>% pull(ci_upper)
 ```
 
-95% Confidence Interval of $\log(\hat\beta_1\times \hat\beta_2)$ is between (`r round(CI_result_lower,4)`,`r round(CI_result_upper,4)`)
+**Discussion:** The 95% Confidence Interval of the product of beta estimates $\log(\hat\beta_1\times \hat\beta_2)$ is (`r round(CI_result_lower,4)`,`r round(CI_result_upper,4)`).
 
-**95% CI for $\hat r^2$**
+**95% CI of the R-Squared $\hat r^2$**
 ```{r}
 CI_result2 <-
   r_squared %>%
@@ -260,7 +262,7 @@ CI_result_lower2 <- CI_result2 %>% pull(ci_lower)
 CI_result_upper2 <- CI_result2 %>% pull(ci_upper)
 ```
 
-95% Confidence Interval of $\hat r^2$ is between (`r round(CI_result_lower2,4)`,`r round(CI_result_upper2,4)`)
+**Discussion:** The 95% Confidence Interval of the product of beta estimates $\hat r^2$ is (`r round(CI_result_lower2,4)`,`r round(CI_result_upper2,4)`).
 
 
 
