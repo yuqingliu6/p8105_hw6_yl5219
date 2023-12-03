@@ -107,6 +107,7 @@ model_results |>
 
 ### Problem 2
 
+**Import dataset**
 ```{r}
 weather_df = 
   rnoaa::meteo_pull_monitors(
@@ -121,35 +122,193 @@ weather_df =
   select(name, id, everything())
 ```
 
+**Build a regression model for `tmax`**
+
 ```{r}
+model_tmax <- lm(tmax ~ tmin + prcp, data = weather_df)
+summary(model_tmax)
+```
+
+**Perform bootstrap analysis for $\hat r^2$ and $\log(\hat\beta_1\times \hat\beta_2)$**
+
+```{r}
+set.seed(123)
+```
+
+**Write a function to generate 5000 bootstraps samples**
+
+```{r}
+boot_sample = function(df) {
+  sample_frac(df, replace = TRUE)
+}
+```
+
+
+**Generate 5000 bootstraps samples**
+```{r}
+boot_straps = 
+  tibble(strap_number = 1:5000) |> 
+  mutate(
+    strap_sample = map(strap_number, \(i) boot_sample(df = weather_df))
+  )
+
+boot_straps
+```
+
+**Combine 5000 bootstrap estimates**
+
+```{r}
+bootstrap_results = 
+  boot_straps %>% 
+  mutate(
+    models = map(strap_sample, ~lm(tmax ~ tmin + prcp, data = .x) ),
+    results = map(models, broom::tidy)) %>% 
+  select(-strap_sample, -models) %>% 
+  unnest(results) 
 
 ```
+
+
+**Computing log_betas and getting 5000 of those estiamtes**
+
+```{r}
+log_betas <-  
+  bootstrap_results %>%
+  group_by(strap_number) %>%
+  summarise(log_betas = log(estimate[2] * estimate[3])) %>%
+  select(log_betas, strap_number)
+```
+
+
+**Generating 5000 bootstrap estimates**
+```{r}
+bootstrap_results2 <- 
+  boot_straps %>% 
+  mutate(
+    models = map(strap_sample, ~lm(tmax ~ tmin + prcp, data = .x) ),
+    results = map(models, broom::glance)) %>% 
+  select(-strap_sample, -models) %>% 
+  unnest(results) 
+```
+
+**Getting 5000 R-Squared estimates**
+```{r}
+r_squared <- 
+  bootstrap_results2 %>%
+  select(r.squared, strap_number)
+```
+
+**Fitting density plots of two estimates**
+
+```{r,warning=FALSE}
+log_betas_sd <- 
+  log_betas %>%
+  summarise(log_betas_sd = sd(as.numeric(log_betas),na.rm = TRUE)) %>%
+  pull(log_betas_sd)
+
+log_betas_mean <- 
+  log_betas %>% 
+  summarise(log_betas_mean = mean(as.numeric(log_betas), na.rm = TRUE)) %>%
+  pull(log_betas_mean)
+
+log_betas %>%
+  ggplot(aes(x = log_betas)) + geom_density() +
+  labs(title = "Distribution of log(Beta1 * Beta2)")
+```
+
+The density curve for $\log(\hat\beta_1\times \hat\beta_2)$ is left-skewed with a mean around `r round(log_betas_mean,4)` and a sd around `r round(log_betas_sd,4)`
+
+```{r,warning=FALSE}
+r_squared_sd <-
+  r_squared %>%
+  summarise(r_squared_sd = sd(r.squared)) %>%
+  pull(r_squared_sd)
+
+r_squared_mean <-
+  r_squared %>%
+  summarise(r_squared_mean = mean(r.squared)) %>%
+  pull(r_squared_mean)
+
+r_squared %>%
+  ggplot(aes(x = r.squared)) + geom_density()+
+  labs(title = "Distribution of R-squared")
+```
+
+The density curve for $\hat r^2$ is slightly left-skewed with a mean around `r round(r_squared_mean,4)` and a sd around `r round(r_squared_sd,4)`
+
+**95% CI for $\log(\hat\beta_1\times \hat\beta_2)$**
+```{r}
+CI_result <-
+  log_betas %>%
+  summarize(ci_lower = quantile(log_betas, 0.025, na.rm = TRUE),
+            ci_upper = quantile(log_betas, 0.975, na.rm = TRUE))
+
+CI_result_lower <- CI_result %>% pull(ci_lower)
+CI_result_upper <- CI_result %>% pull(ci_upper)
+```
+
+95% Confidence Interval of $\log(\hat\beta_1\times \hat\beta_2)$ is between (`r round(CI_result_lower,4)`,`r round(CI_result_upper,4)`)
+
+**95% CI for $\hat r^2$**
+```{r}
+CI_result2 <-
+  r_squared %>%
+  summarize(ci_lower = quantile(r.squared, 0.025),
+            ci_upper = quantile(r.squared, 0.975)) 
+
+CI_result_lower2 <- CI_result2 %>% pull(ci_lower)
+CI_result_upper2 <- CI_result2 %>% pull(ci_upper)
+```
+
+95% Confidence Interval of $\hat r^2$ is between (`r round(CI_result_lower2,4)`,`r round(CI_result_upper2,4)`)
+
 
 
 ### Problem 3
 
-**Import and clean dataset:**
-
+**Import and clean dataset**
 ```{r}
 birthweight_df = 
   read_csv("./birthweight.csv")|>
   mutate(babysex = factor(babysex), frace = factor(frace), malform = factor(malform),
-         mrace = factor(mrace)) 
+         mrace = factor(mrace)) |>
+  mutate(babysex = ifelse(babysex == "1", "male","female"),
+         malform = ifelse(malform == "0", "absent","present"),
+         frace = recode(frace, "1" = "White", "2" = "Black", "3" = "Asian", 
+                        "4" = "Puerto Rican", "8" = "Other", "9" = "Unknown"),
+         mrace = recode(mrace, "1" = "White", "2" = "Black", 
+                        "3" = "Asian", "4" = "Puerto Rican", "8" = "Other")
+         )
 ```
-**Build a regression model for birthweight.**
-
+**Check for missing data**
 ```{r}
-model1 <- lm(bwt ~ gaweeks + momage + smoken, data = birthweight_df)
-summary(model1)
+skimr::skim(birthweight_df)
 ```
-**Discussion:** I build a linear regression model with the independent variables (predictors) of gestational age in weeks, mother’s age at delivery (years), and average number of cigarettes smoked per day during pregnancy, and the dependent variable of baby’s birth weight (grams).
+**Discussion:** The cleaned dataset has no missing value. The dataset has `r ncol(birthweight_df)` variables and `r nrow(birthweight_df)` observations. The variables included in this datasets are `r names(birthweight_df)`.
+
+**Build a regression model for birthweight**
+Try to create a model with all the predictive variables available:
+```{r}
+model_all <- lm(bwt ~ ., data = birthweight_df)
+summary(model_all)
+```
+**Comment:** The linear regression model with dependent variable of baby’s birth weight (grams) and independent variable of all other variablse as predictors showed some variables are statistically signification in their association with baby's birth weight. So, I will include them in my chosen model. 
+
+The model that I choose:
+```{r}
+model_chosen <- lm(bwt ~ babysex + bhead + blength + delwt + gaweeks + mrace + parity + smoken, data = birthweight_df)
+summary(model_chosen)
+```
 
 
-**Comparison with other models:**
+**Discussion:** I built a linear regression model with the independent variables (predictors) of baby's sex, baby’s head circumference at birth (centimeters), baby’s length at birth (centimeteres), mother’s weight at delivery (pounds), gestational age in weeks, mother’s race, number of live births prior to this pregnancy, and average number of cigarettes smoked per day during pregnancy, and the dependent variable of baby’s birth weight (grams). In this model, all the predictors are significantly associated with the outcome baby's birth weight except for the mother's race of asian. 
+
+
+**Comparison with other models**
 
 ```{r}
 model_1 <- lm(bwt ~ blength + gaweeks, data = birthweight_df)
-model_2 <- lm(bwt ~ bhead * blength * babysex, data = birthweight_df)
+model_2 <- lm(bwt ~ bhead + blength + babysex + bhead * blength + bhead * babysex + blength * babysex + bhead * blength * babysex, data = birthweight_df)
 ```
 
 **Cross validation using `modelr`**
@@ -163,11 +322,11 @@ cv_df =
 cv_df <- 
   cv_df |> 
   mutate(
-    model  = map(train, ~lm(bwt ~ gaweeks + momage + smoken, data = .)),
+    model_chosen  = map(train, ~lm(bwt ~ babysex + bhead + blength + delwt + gaweeks + mrace + parity + smoken, data = .)),
     model_1 = map(train, ~lm(bwt ~ blength + gaweeks, data = .)),
     model_2 = map(train, ~lm(bwt ~ bhead * blength * babysex, data = .))) |>
   mutate(
-    rmse_model = map2_dbl(model, test, ~rmse(model = .x, data = .y)),
+    rmse_model_chosen = map2_dbl(model_chosen, test, ~rmse(model = .x, data = .y)),
     rmse_model_1 = map2_dbl(model_1, test, ~rmse(model = .x, data = .y)),
     rmse_model_2 = map2_dbl(model_2, test, ~rmse(model = .x, data = .y)))
 ```
@@ -186,4 +345,4 @@ cv_df |>
   ggplot(aes(x = model, y = rmse)) + geom_violin()
 ```
 
-**Discussion:** Based on the results, we can find my model has lower predictive accuracy as the rmse are higher. 
+**Discussion:** Based on the results, we can find my model has greater predictive accuracy as the rmse are lowest in my model. The model using length at birth and gestational age as predictors (main effects only) has the highest rmse, which indicates it performs worst among the three models. The model I chose has lower rmse than the model using head circumference, length, sex, and all interactions (including the three-way interaction) between these, which means my model has higher predictive accuracy than that model. 
