@@ -154,35 +154,10 @@ boot_straps =
 
 boot_straps
 ```
-
 **Combine 5000 bootstraps results**
 
-```{r warning=FALSE}
-bootstrap_results = 
-  boot_straps |> 
-  mutate(
-    models = map(strap_sample, ~lm(tmax ~ tmin + prcp, data = .x) ),
-    results = map(models, broom::tidy)) |> 
-  select(-strap_sample, -models) |> 
-  unnest(results) 
-
-```
-
-
-**Compute the log of the product of beta estimates $\log(\hat\beta_1\times \hat\beta_2)$ of 5000 bootstraps**
-
 ```{r}
-log_betas <-  
-  bootstrap_results |>
-  group_by(strap_number) |>
-  summarise(log_betas = log(estimate[2] * estimate[3])) |>
-  select(log_betas, strap_number)
-```
-
-
-**Generate another 5000 bootstrap estimates**
-```{r}
-bootstrap_results2 <- 
+bootstrap_results <- 
   boot_straps |> 
   mutate(
     models = map(strap_sample, ~lm(tmax ~ tmin + prcp, data = .x) ),
@@ -194,29 +169,34 @@ bootstrap_results2 <-
 **Compute the R-Squared $\hat r^2$ of 5000 bootstraps**
 ```{r}
 r_squared <- 
-  bootstrap_results2 |>
+  bootstrap_results |>
   select(r.squared, strap_number)
 ```
 
-**Fit density plot of the product of beta estimates $\log(\hat\beta_1\times \hat\beta_2)$**
+**Generate another 5000 bootstrap estimates**
 
-```{r}
-log_betas_sd <- 
-  log_betas |>
-  summarise(log_betas_sd = sd(as.numeric(log_betas),na.rm = TRUE)) |>
-  pull(log_betas_sd)
+```{r warning=FALSE}
+bootstrap_results2 = 
+  boot_straps |> 
+  mutate(
+    models = map(strap_sample, ~lm(tmax ~ tmin + prcp, data = .x) ),
+    results = map(models, broom::tidy)) |> 
+  select(-strap_sample, -models) |> 
+  unnest(results) 
 
-log_betas_mean <- 
-  log_betas |>
-  summarise(log_betas_mean = mean(as.numeric(log_betas), na.rm = TRUE)) |>
-  pull(log_betas_mean)
-
-log_betas |>
-  ggplot(aes(x = log_betas)) + geom_density() +
-  labs(title = "Distribution of log(Beta1 * Beta2)")
 ```
 
-**Discussion:** The density curve of the the product of two beta estimates $\log(\hat\beta_1\times \hat\beta_2)$ is left-skewed. Its mean is approximately`r round(log_betas_mean,4)`, and its standard deviation is  approximately `r round(log_betas_sd,4)`.
+**Compute the log of the product of beta estimates $\log(\hat\beta_1\times \hat\beta_2)$ of 5000 bootstraps**
+
+```{r}
+log_betas <-  
+  bootstrap_results2 |>
+  group_by(strap_number) |>
+  summarise(log_betas = log(estimate[2] * estimate[3])) |>
+  select(log_betas, strap_number)
+```
+
+
 
 **Fit density plot of R-Squared $\hat r^2$ **
 
@@ -238,31 +218,55 @@ r_squared |>
 
 **Discussion:** The density curve of R-Squared $\hat r^2$ is slightly left-skewed. Its mean is  approximately `r round(r_squared_mean,4)` and its standard deviation is  approximately `r round(r_squared_sd,4)`.
 
-**95% CI of log of the product of beta estimates $\log(\hat\beta_1\times \hat\beta_2)$**
+
+**Fit density plot of the product of beta estimates $\log(\hat\beta_1\times \hat\beta_2)$**
+
+```{r}
+log_betas_sd <- 
+  log_betas |>
+  summarise(log_betas_sd = sd(as.numeric(log_betas),na.rm = TRUE)) |>
+  pull(log_betas_sd)
+
+log_betas_mean <- 
+  log_betas |>
+  summarise(log_betas_mean = mean(as.numeric(log_betas), na.rm = TRUE)) |>
+  pull(log_betas_mean)
+
+log_betas |>
+  ggplot(aes(x = log_betas)) + geom_density() +
+  labs(title = "Distribution of log(Beta1 * Beta2)")
+```
+
+**Discussion:** The density curve of the the product of two beta estimates $\log(\hat\beta_1\times \hat\beta_2)$ is left-skewed. Its mean is approximately`r round(log_betas_mean,4)`, and its standard deviation is  approximately `r round(log_betas_sd,4)`.
+
+
+
+**95% CI of the R-Squared $\hat r^2$**
 ```{r}
 CI_result <-
-  log_betas |>
-  summarize(ci_lower = quantile(log_betas, 0.025, na.rm = TRUE),
-            ci_upper = quantile(log_betas, 0.975, na.rm = TRUE))
+  r_squared |>
+  summarize(ci_lower = quantile(r.squared, 0.025),
+            ci_upper = quantile(r.squared, 0.975)) 
 
 CI_result_lower <- CI_result |> pull(ci_lower)
 CI_result_upper <- CI_result |> pull(ci_upper)
 ```
 
-**Discussion:** The 95% Confidence Interval of the product of beta estimates $\log(\hat\beta_1\times \hat\beta_2)$ is (`r round(CI_result_lower,4)`,`r round(CI_result_upper,4)`).
+**Discussion:** The 95% Confidence Interval of the product of beta estimates $\hat r^2$ is (`r round(CI_result_lower,4)`,`r round(CI_result_upper,4)`).
 
-**95% CI of the R-Squared $\hat r^2$**
+
+**95% CI of log of the product of beta estimates $\log(\hat\beta_1\times \hat\beta_2)$**
 ```{r}
 CI_result2 <-
-  r_squared |>
-  summarize(ci_lower = quantile(r.squared, 0.025),
-            ci_upper = quantile(r.squared, 0.975)) 
+  log_betas |>
+  summarize(ci_lower = quantile(log_betas, 0.025, na.rm = TRUE),
+            ci_upper = quantile(log_betas, 0.975, na.rm = TRUE))
 
 CI_result_lower2 <- CI_result2 |> pull(ci_lower)
 CI_result_upper2 <- CI_result2 |> pull(ci_upper)
 ```
 
-**Discussion:** The 95% Confidence Interval of the product of beta estimates $\hat r^2$ is (`r round(CI_result_lower2,4)`,`r round(CI_result_upper2,4)`).
+**Discussion:** The 95% Confidence Interval of the product of beta estimates $\log(\hat\beta_1\times \hat\beta_2)$ is (`r round(CI_result_lower2,4)`,`r round(CI_result_upper2,4)`).
 
 
 
@@ -289,21 +293,22 @@ skimr::skim(birthweight_df)
 **Discussion:** The cleaned dataset has no missing value. The dataset has `r ncol(birthweight_df)` variables and `r nrow(birthweight_df)` observations. The variables included in this datasets are `r names(birthweight_df)`.
 
 **Build a regression model for birthweight**
-Try to create a model with all the predictive variables available:
+
+I first tried to create a model with all the predictive variables available:
 ```{r}
 model_all <- lm(bwt ~ ., data = birthweight_df)
 summary(model_all)
 ```
 **Comment:** The linear regression model with dependent variable of baby’s birth weight (grams) and independent variable of all other variablse as predictors showed some variables are statistically signification in their association with baby's birth weight. So, I will include them in my chosen model. 
 
-The model that I choose:
+Based on the results in full model, the model that I choose is:
 ```{r}
 model_chosen <- lm(bwt ~ babysex + bhead + blength + delwt + gaweeks + mrace + parity + smoken, data = birthweight_df)
 summary(model_chosen)
 ```
 
 
-**Discussion:** I built a linear regression model with the independent variables (predictors) of baby's sex, baby’s head circumference at birth (centimeters), baby’s length at birth (centimeteres), mother’s weight at delivery (pounds), gestational age in weeks, mother’s race, number of live births prior to this pregnancy, and average number of cigarettes smoked per day during pregnancy, and the dependent variable of baby’s birth weight (grams). In this model, all the predictors are significantly associated with the outcome baby's birth weight except for the mother's race of asian. 
+**Discussion:** I built a linear regression model with the independent variables (predictors) of baby's sex, baby’s head circumference at birth (centimeters), baby’s length at birth (centimeteres), mother’s weight at delivery (pounds), gestational age in weeks, mother’s race, number of live births prior to this pregnancy, and average number of cigarettes smoked per day during pregnancy, and the dependent variable of baby’s birth weight (grams). In this model, all the predictors are significantly associated with the outcome baby's birth weight except for the mother's race of Asian. 
 
 
 **Comparison with other models**
@@ -313,7 +318,7 @@ model_1 <- lm(bwt ~ blength + gaweeks, data = birthweight_df)
 model_2 <- lm(bwt ~ bhead + blength + babysex + bhead * blength + bhead * babysex + blength * babysex + bhead * blength * babysex, data = birthweight_df)
 ```
 
-**Cross validation using `modelr`**
+**Cross validation using `crossv_mc` function in `modelr`**
 ```{r}
 cv_df = 
   crossv_mc(birthweight_df, 100) 
